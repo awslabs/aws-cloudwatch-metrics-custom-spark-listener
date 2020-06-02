@@ -1,0 +1,822 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "EMR Cluster for Spark Streaming Listener sample code.",
+    "Parameters": {
+        "EMRClusterName": {
+            "Description": "Name of the cluster",
+            "Type": "String",
+            "Default": "StreamListenerExample"
+        },
+        "KeyName": {
+            "Description": "Must be an existing SSH Keyname",
+            "Type": "String"
+        },
+        "MasterInstanceType": {
+            "Description": "Instance type to be used for the master instance.",
+            "Type": "String",
+            "Default": "m5d.xlarge"
+        },
+        "CoreInstanceType": {
+            "Description": "Instance type to be used for core instances.",
+            "Type": "String",
+            "Default": "m5d.xlarge"
+        },
+        "NumberOfCoreInstances": {
+            "Description": "Must be a valid number",
+            "Type": "Number",
+            "Default": 2
+        },
+        "MinNumberOfTaskInstances": {
+            "Description": "Must be a valid number",
+            "Type": "Number",
+            "Default": 0
+        },
+        "MaxNumberOfTaskInstances": {
+            "Description": "Must be a valid number",
+            "Type": "Number",
+            "Default": 3
+        },
+        "SubnetID": {
+            "Description": "Must be Valid public subnet ID",
+            "Default": "subnet-XXXXXXXX",
+            "Type": "String"
+        },
+        "LogUri": {
+            "Description": "Must be a valid S3 URL",
+            "Default": "s3://your-bucket-path/elasticmapreduce/",
+            "Type": "String"
+        },
+        "StreamName": {
+            "Description": "Must be a valid Kinesis Stream name ",
+            "Default": "stream-listener-example",
+            "Type": "String"
+        },
+        "Applications": {
+            "Description": "Please select which application will be installed on the cluster this would be only Ganglia and spark for this template",
+            "Type": "String",
+            "Default": "Spark",
+            "AllowedValues": [
+                "Spark"
+            ]
+        },
+        "WritableS3Location": {
+            "Description": "A location on S3 to write temporary application scripts. It should end with '/' - s3://bucketname/keypath/ ",
+            "Type": "String",
+            "Default": "s3://your-bucket-path/writable/",
+            "AllowedPattern": "s3://(.*/)+"
+        }
+                
+        
+        
+        
+    },
+    "Mappings": {},
+    "Conditions": {
+        "Spark": {
+            "Fn::Equals": [
+                {
+                    "Ref": "Applications"
+                },
+                "Spark"
+            ]
+        }
+    },
+    "Resources": {
+        "EMRCluster": {
+            "DependsOn": [
+                "KinesisStream",
+                "EMRClusterServiceRole",
+                "EMRClusterinstanceProfileRole",
+                "EMRClusterinstanceProfile"
+            ],
+            "Type": "AWS::EMR::Cluster",
+            "Properties": {
+                "Applications": [
+                    {
+                        "Name": "Ganglia"
+                    },
+                    {
+                        "Fn::If": [
+                            "Spark",
+                            {
+                                "Name": "Spark"
+                            },
+                            {
+                                "Ref": "AWS::NoValue"
+                            }
+                        ]
+                    }
+                ],
+                "Instances": {
+                    "Ec2KeyName": {
+                        "Ref": "KeyName"
+                    },
+                    "Ec2SubnetId": {
+                        "Ref": "SubnetID"
+                    },
+                    "MasterInstanceGroup": {
+                        "InstanceCount": 1,
+                        "InstanceType": {
+                            "Ref": "MasterInstanceType"
+                        },
+                        "Market": "ON_DEMAND",
+                        "Name": "Master"
+                    },
+                    "CoreInstanceGroup": {
+                        "InstanceCount": {
+                            "Ref": "NumberOfCoreInstances"
+                        },
+                        "InstanceType": {
+                            "Ref": "CoreInstanceType"
+                        },
+                        "Market": "ON_DEMAND",
+                        "Name": "Core"
+                    },
+                    "TerminationProtected": false
+                },
+                "VisibleToAllUsers": true,
+                "JobFlowRole": {
+                    "Ref": "EMRClusterinstanceProfile"
+                },
+                "ReleaseLabel": "emr-5.29.0",
+                "LogUri": {
+                    "Ref": "LogUri"
+                },
+                "Name": {
+                    "Ref": "EMRClusterName"
+                },
+                "AutoScalingRole": "EMR_AutoScaling_DefaultRole",
+                "ServiceRole": {
+                    "Ref": "EMRClusterServiceRole"
+                },
+                "BootstrapActions": [
+                    {
+                        "Name": "SetupScript",
+                        "ScriptBootstrapAction": {
+                            "Args": [
+                                
+                                
+                                
+                                {
+                                    "Ref": "EMRClusterName"
+                                },
+                                {
+                                    "Ref": "StreamName"
+                                }
+                            ],
+                            "Path": {
+                                "Fn::Join": [
+                                    "",
+                                    [
+                                        {
+                                            "Ref": "WritableS3Location"
+                                        },
+                                        "setupStep.sh"
+                                    ]
+                                ]
+                            }
+                        }
+                    }
+                ]
+            }
+        },
+        "TaskInstanceGroupConfig": {
+            "Type": "AWS::EMR::InstanceGroupConfig",
+            "DependsOn": [
+                "EMRCluster"
+            ],
+            "Properties": {
+                "InstanceCount": 0,
+                "InstanceType": {
+                    "Ref": "CoreInstanceType"
+                },
+                "InstanceRole": "TASK",
+                "Market": "ON_DEMAND",
+                "Name": "cfnTask",
+                "JobFlowId": {
+                    "Ref": "EMRCluster"
+                },
+                "AutoScalingPolicy": {
+                    "Constraints": {
+                        "MinCapacity": {
+                            "Ref": "MinNumberOfTaskInstances"
+                        },
+                        "MaxCapacity": {
+                            "Ref": "MaxNumberOfTaskInstances"
+                        }
+                    },
+                    "Rules": [
+                        {
+                            "Name": "Scale-out",
+                            "Description": "Scale-out policy",
+                            "Action": {
+                                "SimpleScalingPolicyConfiguration": {
+                                    "AdjustmentType": "CHANGE_IN_CAPACITY",
+                                    "ScalingAdjustment": 1,
+                                    "CoolDown": 300
+                                }
+                            },
+                            "Trigger": {
+                                "CloudWatchAlarmDefinition": {
+                                    "Dimensions": [
+                                        {
+                                            "Key": "JobFlowId",
+                                            "Value": {
+                                                "Ref": "EMRCluster"
+                                            }
+                                        },
+                                        {
+                                            "Key": "ApplicationName",
+                                            "Value": {
+                                                "Ref": "EMRClusterName"
+                                            }
+                                        }
+                                    ],
+                                    "EvaluationPeriods": 2,
+                                    "Namespace": "AWS/ElasticMapReduce",
+                                    "Period": 300,
+                                    "ComparisonOperator": "GREATER_THAN",
+                                    "Statistic": "AVERAGE",
+                                    "Threshold": 1000,
+                                    "Unit": "MILLI_SECONDS",
+                                    "MetricName": "schedulingDelay"
+                                }
+                            }
+                        },
+                        {
+                            "Name": "Scale-in",
+                            "Description": "Scale-in policy",
+                            "Action": {
+                                "SimpleScalingPolicyConfiguration": {
+                                    "AdjustmentType": "CHANGE_IN_CAPACITY",
+                                    "ScalingAdjustment": -1,
+                                    "CoolDown": 300
+                                }
+                            },
+                            "Trigger": {
+                                "CloudWatchAlarmDefinition": {
+                                    "Dimensions": [
+                                        {
+                                            "Key": "JobFlowId",
+                                            "Value": {
+                                                "Ref": "EMRCluster"
+                                            }
+                                        },
+                                        {
+                                            "Key": "ApplicationName",
+                                            "Value": {
+                                                "Ref": "EMRClusterName"
+                                            }
+                                        }
+                                    ],
+                                    "EvaluationPeriods": 1,
+                                    "Namespace": "AWS/ElasticMapReduce",
+                                    "Period": 300,
+                                    "ComparisonOperator": "LESS_THAN",
+                                    "Statistic": "AVERAGE",
+                                    "Threshold": 500,
+                                    "Unit": "MILLI_SECONDS",
+                                    "MetricName": "schedulingDelay"
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "SparkStreamingMicroBatchProcessingDelayAnomalyDetector": {
+            "Type": "AWS::CloudWatch::AnomalyDetector",
+            "DependsOn": [
+                "EMRCluster"
+            ],
+            "Properties": {
+                "MetricName": "processingDelay",
+                "Namespace": "AWS/ElasticMapReduce",
+                "Dimensions": [
+                    {
+                        "Name": "JobFlowId",
+                        "Value": {
+                            "Ref": "EMRCluster"
+                        }
+                    },
+                    {
+                        "Name": "ApplicationName",
+                        "Value": {
+                            "Ref": "EMRClusterName"
+                        }
+                    }
+                ],
+                "Stat": "Average"
+            }
+        },
+        "MicroBatchProcessingDelayAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "DependsOn": [
+                "EMRCluster"
+            ],
+            "Properties": {
+                "AlarmDescription": "MicroBatch ProcessingDelay",
+                "AlarmName": "MicroBatchProcessingDelay",
+                "ComparisonOperator": "LessThanLowerOrGreaterThanUpperThreshold",
+                "EvaluationPeriods": 2,
+                "Metrics": [
+                    {
+                        "Expression": "ANOMALY_DETECTION_BAND(m1, 10)",
+                        "Id": "ad1"
+                    },
+                    {
+                        "Id": "m1",
+                        "MetricStat": {
+                            "Metric": {
+                                "MetricName": "processingDelay",
+                                "Namespace": "AWS/ElasticMapReduce",
+                                "Dimensions": [
+                                    {
+                                        "Name": "JobFlowId",
+                                        "Value": {
+                                            "Ref": "EMRCluster"
+                                        }
+                                    },
+                                    {
+                                        "Name": "ApplicationName",
+                                        "Value": {
+                                            "Ref": "EMRClusterName"
+                                        }
+                                    }
+                                ]
+                            },
+                            "Period": 60,
+                            "Stat": "Average"
+                        }
+                    }
+                ],
+                "ThresholdMetricId": "ad1",
+                "TreatMissingData": "breaching"
+            }
+        },
+        "SchedulingDelayToProcessingDelayRatio": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "DependsOn": [
+                "EMRCluster"
+            ],
+            "Properties": {
+                "AlarmDescription": "SchedulingDelay to TotalDelay ratio",
+                "AlarmName": "SchedulingDelayToProcessingDelayRatio",
+                "ComparisonOperator": "GreaterThanThreshold",
+                "EvaluationPeriods": 2,
+                "Metrics": [
+                    {
+                        "Expression": "(sdelay/tdelay)*100",
+                        "Id": "sratio"
+                    },
+                    {
+                        "Id": "sdelay",
+                        "MetricStat": {
+                            "Metric": {
+                                "MetricName": "schedulingDelay",
+                                "Namespace": "AWS/ElasticMapReduce",
+                                "Dimensions": [
+                                    {
+                                        "Name": "JobFlowId",
+                                        "Value": {
+                                            "Ref": "EMRCluster"
+                                        }
+                                    },
+                                    {
+                                        "Name": "ApplicationName",
+                                        "Value": {
+                                            "Ref": "EMRClusterName"
+                                        }
+                                    }
+                                ]
+                            },
+                            "Period": 60,
+                            "Stat": "Average"
+                        },
+                        "ReturnData": false
+                    },
+                    {
+                        "Id": "tdelay",
+                        "MetricStat": {
+                            "Metric": {
+                                "MetricName": "totalDelay",
+                                "Namespace": "AWS/ElasticMapReduce",
+                                "Dimensions": [
+                                    {
+                                        "Name": "JobFlowId",
+                                        "Value": {
+                                            "Ref": "EMRCluster"
+                                        }
+                                    },
+                                    {
+                                        "Name": "ApplicationName",
+                                        "Value": {
+                                            "Ref": "EMRClusterName"
+                                        }
+                                    }
+                                ]
+                            },
+                            "Period": 60,
+                            "Stat": "Average"
+                        },
+                        "ReturnData": false
+                    }
+                ],
+                "Threshold": 30,
+                "TreatMissingData": "breaching"
+            }
+        },
+        "IncreaseStepConcurrency": {
+            "DependsOn": [
+                "EMRCluster"
+            ],
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "Description": "This Lambda function executes only once to create sample step script into Application S3 bucket",
+                "Code": {
+                    "ZipFile": {
+                        "Fn::Join": [
+                            "",
+                            [
+                                "import json \n",
+                                "import os \n",
+                                "import traceback \n",
+                                "import cfnresponse \n",
+                                "import boto3 \n",
+                                "\n",
+                                "from botocore.client import Config \n",
+                                "print('Loading function') \n",
+                                "def handler(event, context): \n",
+                                "  if event['RequestType'] == 'Create' or event['RequestType'] == 'Update': \n",
+                                "    WritableLocation='",
+                                {
+                                    "Ref": "WritableS3Location"
+                                },
+                                "' \n",
+                                "    responseData={} \n",
+                                "    try: \n",
+                                "      emrClient = boto3.client('emr') \n",
+                                "      response = emrClient.modify_cluster(ClusterId='",
+                                {
+                                    "Ref": "EMRCluster"
+                                },
+                                "',StepConcurrencyLevel=10 ) \n",
+                                "      print(response) \n",
+                                "    except Exception as e: \n",
+                                "      print(e) \n",
+                                "      responseData={} \n",
+                                "    cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData) \n",
+                                "  elif event['RequestType'] == 'Delete': \n",
+                                "    print(\"CustomResourceDelete\") \n",
+                                "    responseData={} \n",
+                                "    cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData) \n",
+                                "  else: \n",
+                                "    responseData={} \n",
+                                "    cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData) \n"
+                            ]
+                        ]
+                    }
+                },
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "AppLambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Runtime": "python3.7",
+                "Timeout": 300
+            }
+        },
+        "StreamingAppStep": {
+            "DependsOn": [
+                "EMRCluster"
+            ],
+            "Type": "AWS::EMR::Step",
+            "Properties": {
+                "ActionOnFailure": "CONTINUE",
+                "HadoopJarStep": {
+                    "Jar": "command-runner.jar",
+                    "Args": [
+                        "/home/hadoop/streaming-example/streamingStep.sh",
+                        
+                        
+                        
+                        {
+                            "Ref": "EMRClusterName"
+                        },
+                        {
+                            "Ref": "StreamName"
+                        }
+                    ]
+                },
+                "JobFlowId": {
+                    "Ref": "EMRCluster"
+                },
+                "Name": "StreamingAppStep"
+            }
+        },
+        "ProducerAppStep": {
+            "DependsOn": [
+                "EMRCluster"
+            ],
+            "Type": "AWS::EMR::Step",
+            "Properties": {
+                "ActionOnFailure": "CONTINUE",
+                "HadoopJarStep": {
+                    "Jar": "command-runner.jar",
+                    "Args": [
+                        "/home/hadoop/streaming-example/producerStep.sh",
+                        
+                        
+                        
+                        {
+                            "Ref": "EMRClusterName"
+                        },
+                        {
+                            "Ref": "StreamName"
+                        }
+                    ]
+                },
+                "JobFlowId": {
+                    "Ref": "EMRCluster"
+                },
+                "Name": "Producer"
+            }
+        },
+        "KinesisStream": {
+            "Type": "AWS::Kinesis::Stream",
+            "Properties": {
+                "Name": {
+                    "Ref": "StreamName"
+                },
+                "ShardCount": 3
+            }
+        },
+        "EMRClusterServiceRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "elasticmapreduce.amazonaws.com"
+                                ]
+                            },
+                            "Action": [
+                                "sts:AssumeRole"
+                            ]
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AmazonElasticMapReduceRole"
+                ],
+                "Path": "/"
+            }
+        },
+        "EMRClusterinstanceProfileRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "ec2.amazonaws.com"
+                                ]
+                            },
+                            "Action": [
+                                "sts:AssumeRole"
+                            ]
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AmazonElasticMapReduceforEC2Role"
+                ],
+                "Path": "/",
+                "Policies": [
+                    {
+                        "PolicyName": "KinesisStreamWriteAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kinesis:PutRecord*",
+                                        "kinesis:Get*",
+                                        "kinesis:List*",
+                                        "kinesis:Describe*"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "EMRClusterinstanceProfile": {
+            "Type": "AWS::IAM::InstanceProfile",
+            "Properties": {
+                "Path": "/",
+                "Roles": [
+                    {
+                        "Ref": "EMRClusterinstanceProfileRole"
+                    }
+                ]
+            }
+        },
+        "ScriptSetupResource": {
+            "Type": "Custom::ScriptSetupResource",
+            "Version": "1.0",
+            "Properties": {
+                "ServiceToken": {
+                    "Fn::GetAtt": [
+                        "ScriptSetupLambdaFunction",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "IncreaseEMRStepConcurrency": {
+            "Type": "Custom::IncreaseEMRStepConcurrency",
+            "Version": "1.0",
+            "Properties": {
+                "ServiceToken": {
+                    "Fn::GetAtt": [
+                        "IncreaseStepConcurrency",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "ScriptSetupLambdaFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "Description": "This Lambda function executes only once to create sample step script into Application S3 bucket",
+                "Code": {
+                    "ZipFile": {
+                        "Fn::Join": [
+                            "",
+                            [
+                                "import json \n",
+                                "import os \n",
+                                "import traceback \n",
+                                "import cfnresponse \n",
+                                "import boto3 \n",
+                                "import base64 \n",
+                                "\n",
+                                "try: \n",
+                                "  from urlparse import urlparse \n",
+                                "except ImportError: \n",
+                                "  from urllib.parse import urlparse \n",
+                                "\n",
+                                "class S3Url(object): \n",
+                                "  def __init__(self, url): \n",
+                                "    self._parsed = urlparse(url, allow_fragments=False) \n",
+                                "\n",
+                                "  def bucket(self): \n",
+                                "    return self._parsed.netloc \n",
+                                "\n",
+                                "  def key(self): \n",
+                                "    r='' \n",
+                                "    try: \n",
+                                "      if self._parsed.query: \n",
+                                "        r = self._parsed.path.lstrip('/') + '?' + self._parsed.query \n",
+                                "      else: \n",
+                                "        r = self._parsed.path.lstrip('/') \n",
+                                "      if r[-1] == '/': \n",
+                                "        return r \n",
+                                "      return r+'/' \n",
+                                "    except Exception: \n",
+                                "      return '' \n",
+                                "\n",
+                                "  def url(self): \n",
+                                "    return self._parsed.geturl() \n",
+                                "\n",
+                                "from botocore.client import Config \n",
+                                "print('Loading function') \n",
+                                "responseData={} \n",
+                                "WritableLocation='",
+                                {
+                                    "Ref": "WritableS3Location"
+                                },
+                                "' \n",
+                                "def handler(event, context): \n",
+                                "  if event['RequestType'] == 'Create' or event['RequestType'] == 'Update': \n",
+                                "    try: \n",
+                                "      obj = S3Url(WritableLocation) \n",
+                                "      s3 = boto3.resource('s3', config=Config(signature_version='s3v4')) \n",
+                                "      step_base64_file='IyEvYmluL2Jhc2gKQVBQTkFNRT0kMQpTVFJFQU1OQU1FPSQyClJFR0lPTj1gY3VybCAtLXNpbGVudCBodHRwOi8vMTY5LjI1NC4xNjkuMjU0L2xhdGVzdC9keW5hbWljL2luc3RhbmNlLWlkZW50aXR5L2RvY3VtZW50IHwganEgLXIgLnJlZ2lvbmAKSVNNQVNURVI9YGNhdCAvZW1yL2luc3RhbmNlLWNvbnRyb2xsZXIvbGliL2luZm8vaW5zdGFuY2UuanNvbiB8IGpxIC5pc01hc3RlcmAKaWYgWyAiJElTTUFTVEVSIj09InRydWUiIF07IHRoZW4gCiBzdWRvIHl1bSAteSBpbnN0YWxsIGdpdAogd2dldCAiaHR0cHM6Ly9waWNjb2xvLmxpbmsvc2J0LTEuMy44LnRneiIKIENQPSIvaG9tZS9oYWRvb3AiCiBTTkg9IiRDUC9zdHJlYW1pbmctZXhhbXBsZS8iCiB0YXIgLXh6ZiAuL3NidC0xLjMuOC50Z3ogLUMgJENQCiBleHBvcnQgUEFUSD0kUEFUSDokQ1Avc2J0L2JpbgogQkFTRT0iJENQL2F3cy1jbG91ZHdhdGNoLW1ldHJpY3MtY3VzdG9tLXNwYXJrLWxpc3RlbmVyIgogZ2l0IGNsb25lICJodHRwczovL2dpdGh1Yi5jb20vYXdzbGFicy9hd3MtY2xvdWR3YXRjaC1tZXRyaWNzLWN1c3RvbS1zcGFyay1saXN0ZW5lci5naXQiICRCQVNFCiBta2RpciAkU05ICiBCQVNFPSIkQ1AvYXdzLWNsb3Vkd2F0Y2gtbWV0cmljcy1jdXN0b20tc3BhcmstbGlzdGVuZXIiCiBDRkxPQz0iJEJBU0UvQ2xvdWRGb3JtYXRpb24iCiAoIGNkICRCQVNFICYmIHNidCBwYWNrYWdlICkgCiBjcCAkQkFTRS90YXJnZXQvc2NhbGEtMi4xMS8qLmphciAkU05IIAogY3AgJEJBU0UvQ2xvdWRGb3JtYXRpb24vKi5zaCAkU05ICiBjaG1vZCA3NTUgJFNOSC8qLnNoCmZpCg==' \n",
+                                "      step_file=base64.b64decode(step_base64_file) \n",
+                                "      object = s3.Object(obj.bucket(), obj.key() + 'setupStep.sh') \n",
+                                "      object.put( Body=step_file) \n",
+                                "      cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData) \n",
+                                "    except Exception as e: \n",
+                                "      print(e) \n",
+                                "      cfnresponse.send(event, context, cfnresponse.FAILED, responseData) \n",
+                                "  elif event['RequestType'] == 'Delete': \n",
+                                "    try: \n",
+                                "      print(\"CustomResourceDelete\") \n",
+                                "      s3 = boto3.resource('s3', config=Config(signature_version='s3v4')) \n",
+                                "      ddbClient = boto3.client('dynamodb') \n",
+                                "      obj = S3Url(WritableLocation) \n",
+                                "      object = s3.Object(obj.bucket(), obj.key() + 'setupStep.sh') \n",
+                                "      response = object.delete() \n",
+                                "      print('from s3 delete') \n",
+                                "      print(response) \n",
+                                "      response = ddbClient.delete_table(TableName='",
+                                {
+                                    "Ref": "EMRClusterName"
+                                },
+                                "') \n",
+                                "      print('from ddb delete_table') \n",
+                                "      print(response) \n",
+                                "      cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData) \n",
+                                "    except Exception as e: \n",
+                                "      print(e) \n",
+                                "      cfnresponse.send(event, context, cfnresponse.FAILED, responseData) \n",
+                                "  else: \n",
+                                "    cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData) \n"
+                            ]
+                        ]
+                    }
+                },
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "AppLambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Runtime": "python3.7",
+                "Timeout": 300
+            }
+        },
+        "AppLambdaExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "lambda.amazonaws.com"
+                                ]
+                            },
+                            "Action": [
+                                "sts:AssumeRole"
+                            ]
+                        }
+                    ]
+                },
+                "Path": "/",
+                "Policies": [
+                    {
+                        "PolicyName": "DemoAppLambda",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:*",
+                                        "logs:*",
+                                        "elasticmapreduce:*"
+                                    ],
+                                    "Resource": "*"
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": "dynamodb:DeleteTable",
+                                    "Resource": {
+                                        "Fn::Join": [
+                                            "",
+                                            [
+                                                "arn:aws:dynamodb:*:*:table/",
+                                                {
+                                                    "Ref": "EMRClusterName"
+                                                }
+                                            ]
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    },
+    "Outputs": {}
+}
