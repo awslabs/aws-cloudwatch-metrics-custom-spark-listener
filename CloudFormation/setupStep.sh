@@ -5,7 +5,7 @@ REGION=`curl --silent http://169.254.169.254/latest/dynamic/instance-identity/do
 ISMASTER=`cat /emr/instance-controller/lib/info/instance.json | jq .isMaster`
 if [ "$ISMASTER"=="true" ]; then 
  sudo yum -y install git
- wget "https://piccolo.link/sbt-1.3.8.tgz"
+ wget "https://github.com/sbt/sbt/releases/download/v1.3.8/sbt-1.3.8.zip"
  CP="/home/hadoop"
  SNH="$CP/streaming-example/"
  tar -xzf ./sbt-1.3.8.tgz -C $CP
