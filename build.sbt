@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT-0
 
 name := "SparkKinesisExample"
-version := "1.1"
+version := "0.2"
 scalaVersion := "2.12.10"
 libraryDependencies += "org.apache.spark" % "spark-streaming_2.12" % "3.1.1"
 libraryDependencies += "com.amazonaws" % "aws-java-sdk" % "1.11.977"
