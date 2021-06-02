@@ -138,7 +138,7 @@
                 "JobFlowRole": {
                     "Ref": "EMRClusterinstanceProfile"
                 },
-                "ReleaseLabel": "emr-5.29.0",
+                "ReleaseLabel": "emr-6.3.0",
                 "LogUri": {
                     "Ref": "LogUri"
                 },
@@ -550,7 +550,8 @@
                 "Name": {
                     "Ref": "StreamName"
                 },
-                "ShardCount": 3
+                "ShardCount": 3,
+		"StreamEncryption":{ "EncryptionType":"KMS", "KeyId":"alias/aws/kinesis"}
             }
         },
         "EMRClusterServiceRole": {
@@ -715,7 +716,7 @@
                                 "    try: \n",
                                 "      obj = S3Url(WritableLocation) \n",
                                 "      s3 = boto3.resource('s3', config=Config(signature_version='s3v4')) \n",
-                                "      step_base64_file='IyEvYmluL2Jhc2gKQVBQTkFNRT0kMQpTVFJFQU1OQU1FPSQyClJFR0lPTj1gY3VybCAtLXNpbGVudCBodHRwOi8vMTY5LjI1NC4xNjkuMjU0L2xhdGVzdC9keW5hbWljL2luc3RhbmNlLWlkZW50aXR5L2RvY3VtZW50IHwganEgLXIgLnJlZ2lvbmAKSVNNQVNURVI9YGNhdCAvZW1yL2luc3RhbmNlLWNvbnRyb2xsZXIvbGliL2luZm8vaW5zdGFuY2UuanNvbiB8IGpxIC5pc01hc3RlcmAKaWYgWyAiJElTTUFTVEVSIj09InRydWUiIF07IHRoZW4gCiBzdWRvIHl1bSAteSBpbnN0YWxsIGdpdAogd2dldCAiaHR0cHM6Ly9naXRodWIuY29tL3NidC9zYnQvcmVsZWFzZXMvZG93bmxvYWQvdjEuMy44L3NidC0xLjMuOC56aXAiCiBDUD0iL2hvbWUvaGFkb29wIgogU05IPSIkQ1Avc3RyZWFtaW5nLWV4YW1wbGUvIgogdGFyIC14emYgLi9zYnQtMS4zLjgudGd6IC1DICRDUAogZXhwb3J0IFBBVEg9JFBBVEg6JENQL3NidC9iaW4KIEJBU0U9IiRDUC9hd3MtY2xvdWR3YXRjaC1tZXRyaWNzLWN1c3RvbS1zcGFyay1saXN0ZW5lciIKIGdpdCBjbG9uZSAiaHR0cHM6Ly9naXRodWIuY29tL2F3c2xhYnMvYXdzLWNsb3Vkd2F0Y2gtbWV0cmljcy1jdXN0b20tc3BhcmstbGlzdGVuZXIuZ2l0IiAkQkFTRQogbWtkaXIgJFNOSAogQkFTRT0iJENQL2F3cy1jbG91ZHdhdGNoLW1ldHJpY3MtY3VzdG9tLXNwYXJrLWxpc3RlbmVyIgogQ0ZMT0M9IiRCQVNFL0Nsb3VkRm9ybWF0aW9uIgogKCBjZCAkQkFTRSAmJiBzYnQgcGFja2FnZSApIAogY3AgJEJBU0UvdGFyZ2V0L3NjYWxhLTIuMTEvKi5qYXIgJFNOSCAKIGNwICRCQVNFL0Nsb3VkRm9ybWF0aW9uLyouc2ggJFNOSAogY2htb2QgNzU1ICRTTkgvKi5zaApmaQo=' \n",
+                                "      step_base64_file='IyEvYmluL2Jhc2gKQVBQTkFNRT0kMQpTVFJFQU1OQU1FPSQyClJFR0lPTj1gY3VybCAtLXNpbGVudCBodHRwOi8vMTY5LjI1NC4xNjkuMjU0L2xhdGVzdC9keW5hbWljL2luc3RhbmNlLWlkZW50aXR5L2RvY3VtZW50IHwganEgLXIgLnJlZ2lvbmAKSVNNQVNURVI9YGNhdCAvZW1yL2luc3RhbmNlLWNvbnRyb2xsZXIvbGliL2luZm8vaW5zdGFuY2UuanNvbiB8IGpxIC5pc01hc3RlcmAKaWYgWyAiJElTTUFTVEVSIj09InRydWUiIF07IHRoZW4gCiBzdWRvIHl1bSAteSBpbnN0YWxsIGdpdAogQ1A9Ii9ob21lL2hhZG9vcCIKIFNOSD0iJENQL3N0cmVhbWluZy1leGFtcGxlLyIKIEJBU0U9IiRDUC9hd3MtY2xvdWR3YXRjaC1tZXRyaWNzLWN1c3RvbS1zcGFyay1saXN0ZW5lciIKIGdpdCBjbG9uZSAiaHR0cHM6Ly9naXRodWIuY29tL2F3c2xhYnMvYXdzLWNsb3Vkd2F0Y2gtbWV0cmljcy1jdXN0b20tc3BhcmstbGlzdGVuZXIuZ2l0IiAkQkFTRQogbWtkaXIgJFNOSAogQkFTRT0iJENQL2F3cy1jbG91ZHdhdGNoLW1ldHJpY3MtY3VzdG9tLXNwYXJrLWxpc3RlbmVyIgogQ0ZMT0M9IiRCQVNFL0Nsb3VkRm9ybWF0aW9uIgogd2dldCAiaHR0cHM6Ly9naXRodWIuY29tL2F3c2xhYnMvYXdzLWNsb3Vkd2F0Y2gtbWV0cmljcy1jdXN0b20tc3BhcmstbGlzdGVuZXIvcmVsZWFzZXMvZG93bmxvYWQvYmV0YS0wLjEvc3BhcmtraW5lc2lzZXhhbXBsZV8yLjExLTEuMC5qYXIiIC1PICRTTkgvc3BhcmtraW5lc2lzZXhhbXBsZV8yLjExLTEuMC5qYXIKIGNwICRCQVNFL0Nsb3VkRm9ybWF0aW9uLyouc2ggJFNOSAogY2htb2QgNzU1ICRTTkgvKi5zaApmaQo=' \n",
                                 "      step_file=base64.b64decode(step_base64_file) \n",
                                 "      object = s3.Object(obj.bucket(), obj.key() + 'setupStep.sh') \n",
                                 "      object.put( Body=step_file) \n",

@@ -35,7 +35,7 @@ private[kinesis] class CustomKinesisReceiver[T](
     mLevel: MetricsLevel,
     mEnabledDimensions: Set[String],
     pLocation: Option[String])
-  extends KinesisReceiver[T](sName,eUrl,rName,iPosition,cAppName,cInterval,sLevel,mHandler,kCreds,dDBCreds,cWatchCreds) {
+  extends KinesisReceiver[T](sName,eUrl,rName,iPosition,cAppName,cInterval,sLevel,mHandler,kCreds,dDBCreds,cWatchCreds,mLevel,mEnabledDimensions) {
 
   override def preferredLocation: Option[String] = Some(pLocation.getOrElse("NotMatchingName") )
 }

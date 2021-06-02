@@ -32,7 +32,7 @@ private[kinesis] class CustomKinesisInputDStream[T: ClassTag](
     val mLevel: MetricsLevel,
     val mEnabledDimensions: Set[String],
     val preferredLocation : Option[String]
-  ) extends KinesisInputDStream[T](_ssc,sName,eUrl,rName,iPosition,cAppName,cInterval,sLevel,mHandler,kCreds,dDBCreds,cWatchCreds) {
+  ) extends KinesisInputDStream[T](_ssc,sName,eUrl,rName,iPosition,cAppName,cInterval,sLevel,mHandler,kCreds,dDBCreds,cWatchCreds,mLevel,mEnabledDimensions) {
   
   override def getReceiver(): Receiver[T] = {
     new CustomKinesisReceiver(sName, eUrl, rName, iPosition,
@@ -128,12 +128,12 @@ object CustomKinesisInputDStream {
     				this
     }
 
-    def metricsLevel(metricsLevel: MetricsLevel): Builder = {
+    override def metricsLevel(metricsLevel: MetricsLevel): Builder = {
     		this.metricsLevel = Option(metricsLevel)
     				this
     }
 
-    def metricsEnabledDimensions(metricsEnabledDimensions: Set[String]): Builder = {
+    override def metricsEnabledDimensions(metricsEnabledDimensions: Set[String]): Builder = {
     		this.metricsEnabledDimensions = Option(metricsEnabledDimensions)
     				this
     } 
